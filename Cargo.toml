@@ -10,7 +10,7 @@ keywords = ["ecs", "archetype", "simulation", "parallel"]
 categories = ["ecs-engine", "development-tools"]
 
 [dependencies]
-avenix_macros = {path = "../avenix_macros", version = "0.1.0", optional = true }
+avenix_macros = {version = "0.1.0", optional = true }
 fxhash = "0.2.1"
 indexmap = "2.14.0"
 rayon = "1.12.0"
