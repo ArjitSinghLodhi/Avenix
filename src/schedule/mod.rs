@@ -52,12 +52,14 @@ impl Plugin for DefaultSchedulesPlugin {
     }
 }
 
+#[doc(hidden)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct ScheduleId {
-    pub id: TypeId,
-    pub name: &'static str,
+    pub(crate) id: TypeId,
+    pub(crate) name: &'static str,
 }
 
+#[doc(hidden)]
 pub trait IntoScheduleId: ScheduleLabel {
     fn id(&self) -> ScheduleId
     where
@@ -72,6 +74,7 @@ pub trait IntoScheduleId: ScheduleLabel {
 
 impl<T: ?Sized + ScheduleLabel> IntoScheduleId for T {}
 
+#[doc(hidden)]
 pub trait ScheduleLabel: Any + Send + Sync {
     fn default_executor(&mut self) -> Box<dyn SystemExecutor> {
         Box::new(SingleThreadedExecutor)
@@ -79,6 +82,7 @@ pub trait ScheduleLabel: Any + Send + Sync {
 }
 type ConditionFn = Box<dyn Fn(&World) -> bool + Send + Sync>;
 
+#[doc(hidden)]
 pub struct SystemNode {
     system: Box<dyn System>,
     pub(crate) run_conditions: Vec<ConditionFn>,
@@ -97,6 +101,7 @@ impl SystemNode {
     }
 }
 
+#[doc(hidden)]
 pub struct SystemsSchedule {
     systems: Vec<SystemNode>,
 }
@@ -113,10 +118,12 @@ impl SystemsSchedule {
     }
 }
 
+#[doc(hidden)]
 pub trait SystemExecutor: Send + Sync {
     fn run(&mut self, schedule: &mut SystemsSchedule, world: &mut World);
 }
 
+#[doc(hidden)]
 #[derive(Default)]
 pub struct SingleThreadedExecutor;
 
@@ -132,6 +139,7 @@ impl SystemExecutor for SingleThreadedExecutor {
     }
 }
 
+#[doc(hidden)]
 pub struct Schedule {
     id: ScheduleId,
     systems_schedule: SystemsSchedule,

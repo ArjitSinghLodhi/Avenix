@@ -116,18 +116,22 @@ fn run_fragmented_criterion_bench(query: Query<&HeavyTransform>, targets: Res<Be
     let mut group = c.benchmark_group("ecs_massive_fragmentation");
     let target_count = targets.entities.len();
 
-    group.bench_with_input("avenix_safe_fragmented_lookup", &target_count, |b, _| {
-        b.iter(|| {
-            for entity in &targets.entities {
-                if let Some(foo) = query.get(entity) {
-                    black_box(foo);
+    group.bench_with_input(
+        "avenix_safe_fragmented_lookup_heavy",
+        &target_count,
+        |b, _| {
+            b.iter(|| {
+                for entity in &targets.entities {
+                    if let Some(foo) = query.get(entity) {
+                        black_box(foo);
+                    }
                 }
-            }
-        });
-    });
+            });
+        },
+    );
 
     group.bench_with_input(
-        "avenix_unchecked_fragmented_lookup",
+        "avenix_unchecked_fragmented_lookup_heavy",
         &target_count,
         |b, _| {
             b.iter(|| {

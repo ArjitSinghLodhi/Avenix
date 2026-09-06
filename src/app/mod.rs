@@ -19,6 +19,9 @@ use crate::events::{EventBuffer, register_event};
 #[cfg(feature = "events")]
 use std::any::type_name;
 
+#[cfg(feature = "reactivity")]
+use crate::reactivity::register_removal_tracking_buffers;
+
 static APP_INITIALIZED: AtomicBool = AtomicBool::new(false);
 
 struct ConfigurationContext {
@@ -267,6 +270,8 @@ impl App {
         self.configure_plugins();
         self.configure_schedules();
         self.configure_systems();
+        #[cfg(feature = "reactivity")]
+        register_removal_tracking_buffers(self);
     }
 
     fn configure_plugins(&mut self) {

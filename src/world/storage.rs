@@ -1,6 +1,7 @@
 use fxhash::FxHashMap;
 use std::{
-    any::{TypeId, type_name},
+    any::{Any, TypeId, type_name},
+    cell::UnsafeCell,
     sync::atomic::{AtomicU8, Ordering},
 };
 
@@ -14,7 +15,7 @@ use crate::{
 };
 
 #[cfg(feature = "reactivity")]
-use crate::reactivity::TRACKED_COMPONENTS;
+use crate::reactivity::{REMOVAL_TRACKED_COMPS, TRACKED_COMPONENTS};
 
 pub(crate) struct CurrentBufferIdx;
 static CURRENT_BUFFER_IDX: AtomicU8 = AtomicU8::new(1);
@@ -40,8 +41,7 @@ impl CurrentBufferIdx {
 
 pub struct World {
     pub(crate) archetypes_manager: ArchetypeManager,
-    pub(crate) resources:
-        FxHashMap<std::any::TypeId, std::cell::UnsafeCell<Box<dyn std::any::Any>>>,
+    pub(crate) resources: FxHashMap<TypeId, UnsafeCell<Box<dyn Any>>>,
     pub(crate) commands: CommandBuffer,
     pub(crate) free_indices_list: Vec<u32>,
 }
@@ -132,6 +132,12 @@ impl World {
     }
 
     pub fn apply_despawns(&mut self) {
+        #[cfg(feature = "reactivity")]
+        if !self.commands.despawns.is_empty() {
+            for meta in REMOVAL_TRACKED_COMPS.read().values() {
+                (meta.clear_dead_entities)(self)
+            }
+        }
         let despawns = self.commands.despawns.clone();
         for shard in despawns.shards() {
             let mut lock = shard.write();
@@ -155,18 +161,26 @@ impl World {
 
     #[cfg(feature = "reactivity")]
     fn clear_trackers(&mut self) {
-        let tracked = TRACKED_COMPONENTS.read();
+        use crate::reactivity::REMOVAL_TRACKED_COMPS;
+        let tracked_comps = TRACKED_COMPONENTS.read();
+        if !tracked_comps.is_empty() {
+            for archetype in self.archetypes_manager.archetypes.values_mut() {
+                unsafe {
+                    let columns = &mut *archetype.columns.get();
 
-        for archetype in self.archetypes_manager.archetypes.values_mut() {
-            unsafe {
-                let columns = &mut *archetype.columns.get();
-
-                for meta in tracked.iter() {
-                    if let Some(marker_column) = columns.get_mut(&meta.marker_id) {
-                        let raw_any = marker_column.data.as_any_mut();
-                        (meta.clear_column_markers)(raw_any);
+                    for meta in tracked_comps.values() {
+                        if let Some(marker_column) = columns.get_mut(&meta.marker_id) {
+                            let raw_any = marker_column.data.as_any_mut();
+                            (meta.clear_column_markers)(raw_any);
+                        }
                     }
                 }
+            }
+        }
+        let removal_track = REMOVAL_TRACKED_COMPS.read();
+        if !removal_track.is_empty() {
+            for remove_meta in REMOVAL_TRACKED_COMPS.read().values() {
+                (remove_meta.swap_and_clear_buffer)(self)
             }
         }
     }
@@ -174,6 +188,9 @@ impl World {
     #[cfg(feature = "events")]
     fn clear_events(&mut self) {
         let tracked_events = TRACKED_EVENTS.read();
+        if tracked_events.is_empty() {
+            return;
+        }
         for meta in tracked_events.iter() {
             let unsafecell = self
                 .resources
@@ -203,7 +220,7 @@ impl World {
     #[cfg(feature = "events")]
     pub fn get_par_event_writer<T: 'static + Send + Sync>(&mut self) -> ParallelEventWriter<T> {
         ParallelEventWriter {
-            write_buffer: self.get_resource::<EventBuffer<T>>().writer_queue.clone(),
+            write_buffer: self.get_resource::<EventBuffer<T>>().write_queue.clone(),
         }
     }
 

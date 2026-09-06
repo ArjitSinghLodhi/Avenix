@@ -33,7 +33,6 @@ pub mod derive {
     pub use avenix_macros::ComponentBundle;
     pub use avenix_macros::QueryData;
     pub use avenix_macros::QueryFilter;
-    pub use avenix_macros::ScheduleLabel;
     pub use avenix_macros::SystemParam;
 }
 pub mod prelude {

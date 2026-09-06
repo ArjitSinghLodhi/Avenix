@@ -38,27 +38,29 @@ pub(crate) fn register_event<T: 'static + Send + Sync>() {
                 let event_queue = cell
                     .downcast_mut::<EventBuffer<T>>()
                     .expect("Registered event queue was not found when clearing data");
-                event_queue.read_queue.write().queue.clear();
-                std::mem::swap(&mut event_queue.read_queue, &mut event_queue.writer_queue);
+                let read_queue_gaurd = &mut *event_queue.read_queue.write();
+                let write_queue_gaurd = &mut *event_queue.write_queue.write();
+                read_queue_gaurd.queue.clear();
+                std::mem::swap(read_queue_gaurd, write_queue_gaurd);
             },
         });
     }
 }
 
 pub(crate) struct EventQueue<T: 'static + Send + Sync> {
-    queue: ConcurrentBag<T>,
+    pub(crate) queue: ConcurrentBag<T>,
 }
 
 pub struct EventBuffer<T: 'static + Send + Sync> {
     pub(crate) read_queue: Arc<RwLock<EventQueue<T>>>,
-    pub(crate) writer_queue: Arc<RwLock<EventQueue<T>>>,
+    pub(crate) write_queue: Arc<RwLock<EventQueue<T>>>,
 }
 
 impl<T: 'static + Send + Sync> EventBuffer<T> {
     pub(crate) fn new() -> Self {
         EventBuffer {
             read_queue: Arc::new(RwLock::new(EventQueue::new())),
-            writer_queue: Arc::new(RwLock::new(EventQueue::new())),
+            write_queue: Arc::new(RwLock::new(EventQueue::new())),
         }
     }
 }
@@ -121,7 +123,7 @@ impl<'a, T: 'static + Send + Sync> SystemParam for EventWriter<'a, T> {
             let buffer_ptr = world.get_resource_mut::<EventBuffer<T>>() as *mut EventBuffer<T>;
             let buffer_ref: &'a EventBuffer<T> = &*buffer_ptr;
 
-            let queue = buffer_ref.writer_queue.read();
+            let queue = buffer_ref.write_queue.read();
 
             Self {
                 write_buffer: queue,

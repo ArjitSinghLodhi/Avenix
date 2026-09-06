@@ -157,7 +157,7 @@ impl ArchetypeManager {
     #[cfg(feature = "reactivity")]
     pub(crate) fn sync_tracking_markers(&self, types: &mut IndexSet<TypeId, FxBuildHasher>) {
         let tracked = TRACKED_COMPONENTS.read();
-        for meta in tracked.iter() {
+        for meta in tracked.values() {
             if types.contains(&meta.component_id) {
                 types.insert(meta.marker_id);
             } else {
@@ -257,7 +257,7 @@ impl ArchetypeManager {
         {
             let tracked = TRACKED_COMPONENTS.read();
             tracked
-                .iter()
+                .values()
                 .filter(|m| types_set.contains(&m.marker_id))
                 .for_each(|m| {
                     columns.insert(m.marker_id, (m.create_marker_column)());

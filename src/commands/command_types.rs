@@ -3,7 +3,7 @@ use indexmap::{IndexMap, IndexSet};
 use std::{any::TypeId, sync::atomic::AtomicU32};
 
 #[cfg(feature = "reactivity")]
-use crate::reactivity::TRACKED_COMPONENTS;
+use crate::reactivity::{REMOVAL_TRACKED_COMPS, TRACKED_COMPONENTS};
 use crate::{
     commands::{bundle::ComponentBundle, command_queue::WorldCommand},
     entity::Entity,
@@ -296,6 +296,8 @@ impl<T: ComponentBundle + Send> WorldCommand for RemoveComponentsCommand<T> {
         }
 
         unsafe {
+            #[cfg(feature = "reactivity")]
+            let world_ptr = world as *mut World;
             let (old_arch, new_arch) = get_double_archetypes(world, old_arch_id, new_arch_id);
             let old_cols = &mut *old_arch.columns.get();
             let new_cols = &mut *new_arch.columns.get();
@@ -307,7 +309,16 @@ impl<T: ComponentBundle + Send> WorldCommand for RemoveComponentsCommand<T> {
             erase_subtracted_columns(removed_ids, old_cols, old_idx as usize);
 
             #[cfg(feature = "reactivity")]
-            erase_subtracted_markers(&old_arch.types, &new_arch.types, old_cols, old_idx as usize);
+            {
+                erase_subtracted_markers(
+                    &old_arch.types,
+                    &new_arch.types,
+                    old_cols,
+                    old_idx as usize,
+                );
+                let entity_handle = &old_arch.entities[old_idx as usize];
+                push_removed_components_reactivity(world_ptr, removed_ids, entity_handle);
+            }
 
             swap_remove_entity_registry_update(old_arch, old_idx);
 
@@ -510,7 +521,7 @@ unsafe fn swap_remove_entity_registry_update(arch: &mut Archetype, removed_row_i
 #[inline(always)]
 fn initialize_spawn_markers(columns: &mut IndexMap<TypeId, ComponentColumn, FxBuildHasher>) {
     let tracked = TRACKED_COMPONENTS.read();
-    for meta in tracked.iter() {
+    for meta in tracked.values() {
         if let Some(marker_column) = columns.get_mut(&meta.marker_id) {
             unsafe { (meta.push_default_marker)(marker_column) };
         }
@@ -524,7 +535,7 @@ fn initialize_batch_spawn_markers(
     batch_size: usize,
 ) {
     let tracked = TRACKED_COMPONENTS.read();
-    for meta in tracked.iter() {
+    for meta in tracked.values() {
         if let Some(marker_column) = columns.get_mut(&meta.marker_id) {
             for _ in 0..batch_size {
                 unsafe { (meta.push_default_marker)(marker_column) };
@@ -540,7 +551,7 @@ fn initialize_missing_archetype_markers(
     columns: &mut IndexMap<TypeId, ComponentColumn, FxBuildHasher>,
 ) {
     let tracked = TRACKED_COMPONENTS.read();
-    for meta in tracked.iter() {
+    for meta in tracked.values() {
         if types.contains(&meta.marker_id) && !columns.contains_key(&meta.marker_id) {
             columns.insert(meta.marker_id, (meta.create_marker_column)());
         }
@@ -555,7 +566,7 @@ unsafe fn migrate_addition_markers(
     new_cols: &mut IndexMap<TypeId, ComponentColumn, FxBuildHasher>,
 ) {
     let tracked = TRACKED_COMPONENTS.read();
-    for meta in tracked.iter() {
+    for meta in tracked.values() {
         if new_cols.contains_key(&meta.marker_id) {
             if old_types.contains(&meta.marker_id) {
                 continue;
@@ -577,12 +588,34 @@ unsafe fn erase_subtracted_markers(
     row_idx: usize,
 ) {
     let tracked = TRACKED_COMPONENTS.read();
-    for meta in tracked.iter() {
+    for meta in tracked.values() {
         if old_types.contains(&meta.marker_id)
             && !new_types.contains(&meta.marker_id)
             && let Some(marker_col) = old_cols.get_mut(&meta.marker_id)
         {
             unsafe { marker_col.data.swap_remove_erased(row_idx) };
+        }
+    }
+}
+
+#[cfg(feature = "reactivity")]
+pub(crate) unsafe fn push_removed_components_reactivity(
+    world_ptr: *mut World,
+    removed_ids: &[std::any::TypeId],
+    entity: &Entity,
+) {
+    if removed_ids.is_empty() {
+        return;
+    }
+    let tracked = REMOVAL_TRACKED_COMPS.read();
+    if tracked.is_empty() {
+        return;
+    }
+    let world = unsafe { &mut *world_ptr };
+
+    for type_id in removed_ids {
+        if let Some(meta) = tracked.get(type_id) {
+            (meta.push_to_write_queue)(world, entity.clone());
         }
     }
 }

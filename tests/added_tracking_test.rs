@@ -1,6 +1,13 @@
 use avenix::prelude::*;
 use rusty_fork::rusty_fork_test;
 
+#[derive(PartialEq)]
+enum EntityTag {
+    AdderTarget,
+    InserterTarget,
+    DenseNeighbor,
+}
+
 #[allow(dead_code)]
 struct Position {
     x: f32,
@@ -16,8 +23,6 @@ struct Acceleration {
     x: f32,
     y: f32,
 }
-#[allow(dead_code)]
-struct Name(&'static str);
 
 struct FrameCounter {
     current_frame: u32,
@@ -28,14 +33,14 @@ fn increment_frame_system(mut counter: ResMut<FrameCounter>) {
 }
 
 fn setup_double_buffer_entities(mut commands: Commands) {
-    commands.spawn((Position { x: 1.0, y: 1.0 }, Name("Adder Target")));
-    commands.spawn((Position { x: 2.0, y: 2.0 }, Name("Inserter Target")));
-    commands.spawn((Position { x: 3.0, y: 3.0 }, Name("Dense Neighbor")));
+    commands.spawn((Position { x: 1.0, y: 1.0 }, EntityTag::AdderTarget));
+    commands.spawn((Position { x: 2.0, y: 2.0 }, EntityTag::InserterTarget));
+    commands.spawn((Position { x: 3.0, y: 3.0 }, EntityTag::DenseNeighbor));
 }
 
 fn apply_frame_1_mutations(
     counter: Res<FrameCounter>,
-    query: Query<(Entity, &Name)>,
+    query: Query<(Entity, &EntityTag)>,
     mut commands: Commands,
 ) {
     if counter.current_frame != 1 {
@@ -43,12 +48,15 @@ fn apply_frame_1_mutations(
     }
 
     for view in query.iter() {
-        for (entity, name) in view.iter() {
-            if name.0 == "Adder Target" {
-                commands.add_components(entity.clone(), (Velocity { x: 10.0, y: 10.0 },));
-            }
-            if name.0 == "Inserter Target" {
-                commands.insert_components(entity.clone(), (Acceleration { x: 5.0, y: 5.0 },));
+        for (entity, tag) in view.iter() {
+            match tag {
+                EntityTag::AdderTarget => {
+                    commands.add_components(entity.clone(), (Velocity { x: 10.0, y: 10.0 },));
+                }
+                EntityTag::InserterTarget => {
+                    commands.insert_components(entity.clone(), (Acceleration { x: 5.0, y: 5.0 },));
+                }
+                EntityTag::DenseNeighbor => {}
             }
         }
     }
@@ -56,8 +64,8 @@ fn apply_frame_1_mutations(
 
 fn verify_frame_1_buffering_isolation(
     counter: Res<FrameCounter>,
-    query_added_vel: Query<&Name, Added<Velocity>>,
-    query_added_accel: Query<&Name, Added<Acceleration>>,
+    query_added_vel: Query<&EntityTag, Added<Velocity>>,
+    query_added_accel: Query<&EntityTag, Added<Acceleration>>,
 ) {
     if counter.current_frame != 1 {
         return;
@@ -88,9 +96,9 @@ fn verify_frame_1_buffering_isolation(
 
 fn verify_frame_2_buffered_reads(
     counter: Res<FrameCounter>,
-    query_vel: Query<&Name, Added<Velocity>>,
-    query_accel: Query<&Name, Added<Acceleration>>,
-    query_neighbor: Query<&Name, (With<Position>, Without<Velocity>, Without<Acceleration>)>,
+    query_vel: Query<&EntityTag, Added<Velocity>>,
+    query_accel: Query<&EntityTag, Added<Acceleration>>,
+    query_neighbor: Query<&EntityTag, (With<Position>, Without<Velocity>, Without<Acceleration>)>,
 ) {
     if counter.current_frame != 2 {
         return;
@@ -98,8 +106,8 @@ fn verify_frame_2_buffered_reads(
 
     let mut vel_detected = false;
     for view in query_vel.iter() {
-        for name in view.iter() {
-            if name.0 == "Adder Target" {
+        for tag in view.iter() {
+            if *tag == EntityTag::AdderTarget {
                 vel_detected = true;
             }
         }
@@ -111,8 +119,8 @@ fn verify_frame_2_buffered_reads(
 
     let mut accel_detected = false;
     for view in query_accel.iter() {
-        for name in view.iter() {
-            if name.0 == "Inserter Target" {
+        for tag in view.iter() {
+            if *tag == EntityTag::InserterTarget {
                 accel_detected = true;
             }
         }
@@ -124,8 +132,8 @@ fn verify_frame_2_buffered_reads(
 
     let mut neighbor_intact = false;
     for view in query_neighbor.iter() {
-        for name in view.iter() {
-            if name.0 == "Dense Neighbor" {
+        for tag in view.iter() {
+            if *tag == EntityTag::DenseNeighbor {
                 neighbor_intact = true;
             }
         }
@@ -138,7 +146,7 @@ fn verify_frame_2_buffered_reads(
 
 fn apply_frame_2_redundant_insert(
     counter: Res<FrameCounter>,
-    query: Query<(Entity, &Name)>,
+    query: Query<(Entity, &EntityTag)>,
     mut commands: Commands,
 ) {
     if counter.current_frame != 2 {
@@ -146,8 +154,8 @@ fn apply_frame_2_redundant_insert(
     }
 
     for view in query.iter() {
-        for (entity, name) in view.iter() {
-            if name.0 == "Inserter Target" {
+        for (entity, tag) in view.iter() {
+            if *tag == EntityTag::InserterTarget {
                 commands.insert_components(entity.clone(), (Acceleration { x: 99.0, y: 99.0 },));
             }
         }
@@ -156,8 +164,8 @@ fn apply_frame_2_redundant_insert(
 
 fn verify_frame_3_decay_and_overwrites(
     counter: Res<FrameCounter>,
-    query_vel: Query<&Name, Added<Velocity>>,
-    query_accel: Query<&Name, Added<Acceleration>>,
+    query_vel: Query<&EntityTag, Added<Velocity>>,
+    query_accel: Query<&EntityTag, Added<Acceleration>>,
 ) {
     if counter.current_frame != 3 {
         return;

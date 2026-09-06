@@ -14,8 +14,9 @@ pub(crate) fn register_tracked_component<T: 'static>() {
     let mut tracked = TRACKED_COMPONENTS.write();
     let component_id = TypeId::of::<T>();
 
-    if !tracked.iter().any(|m| m.component_id == component_id) {
-        tracked.push(TrackedComponentMeta {
+    tracked.insert(
+        component_id,
+        TrackedComponentMeta {
             component_id,
             marker_id: TypeId::of::<ChangedMarker<T>>(),
             create_marker_column: || ComponentColumn {
@@ -36,8 +37,8 @@ pub(crate) fn register_tracked_component<T: 'static>() {
                     marker.markers[idx as usize] = false;
                 });
             },
-        });
-    }
+        },
+    );
 }
 
 #[derive(Clone, Copy)]

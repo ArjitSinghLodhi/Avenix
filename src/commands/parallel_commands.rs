@@ -13,7 +13,7 @@ use crate::extensions::{SystemMeta, SystemParam, World};
 ///
 /// `ParallelCommands` can be passed to external or background worker threads, allowing them to
 /// concurrently queue up structural modifications and despawn targets outside the main execution
-/// path. It can be obtained directly from the application layer via [`.get_par_commands()`].
+/// path. It can be obtained directly from the world layer via [`.get_par_commands()`] using `app.world_mut().get_par_commands()`.
 ///
 /// # Deferred Actions & Invariants
 ///
@@ -26,7 +26,7 @@ use crate::extensions::{SystemMeta, SystemParam, World};
 ///   bound by the strict *Entity Despawn Invariant*. All active cloned handles for those targets must
 ///   be dropped across the frame layout before execution occurs.
 ///
-/// [`.get_par_commands()`]: crate::app::App::get_par_commands
+/// [`.get_par_commands()`]: crate::world::storage::World::get_par_commands
 #[derive(Clone)]
 pub struct ParallelCommands {
     pub(crate) queue: Arc<RwLock<CommandQueue>>,

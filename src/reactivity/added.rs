@@ -12,11 +12,9 @@ use crate::{
 
 pub(crate) fn register_added_tracked_component<T: 'static>() {
     let mut tracked = TRACKED_COMPONENTS.write();
-    if !tracked
-        .iter()
-        .any(|meta| meta.component_id == TypeId::of::<T>())
-    {
-        tracked.push(TrackedComponentMeta {
+    tracked.insert(
+        TypeId::of::<T>(),
+        TrackedComponentMeta {
             component_id: TypeId::of::<T>(),
             marker_id: TypeId::of::<AddedMarker<T>>(),
             create_marker_column: || ComponentColumn {
@@ -40,8 +38,8 @@ pub(crate) fn register_added_tracked_component<T: 'static>() {
                     marker.added_marker[idx as usize] = false;
                 });
             },
-        });
-    }
+        },
+    );
 }
 
 pub struct AddedMarker<T> {

@@ -1,6 +1,6 @@
-# 🦀 Avenix ECS Engine
+# Avenix ECS Engine
 
-A deterministic, high-concurrency Entity Component System (ECS) written in Rust, engineered for zero-overhead structural memory layouts, compile-time concurrency verification, and vectorized parallel execution pipelines.
+A deterministic, high-concurrency Entity Component System (ECS) written in Rust, engineered for zero-overhead structural memory layouts, parallel workloads and complex coordination.
 
 ---
 
@@ -107,11 +107,18 @@ Unlock zero-overhead data abstractions. Code generation pipelines maintain user 
 
 ### Cargo Compilation Flags
 
-Avenix by default compiles strictly as a data container (`default = []`). Scale the engine's capabilities by opting into modular compilation blocks in your `Cargo.toml`:
+Avenix by default does not turn on any features (`default = []`). Scale the engine's capabilities by opting into modular compilation blocks in your `Cargo.toml`:
 
 * `derive` – Activates code-generation syntax macros (`ComponentBundle`, `QueryData`, etc.).
-* `reactivity` – Activates double-buffered reactivity tracking (`Added`, `Changed`, `ChangedTracker`, etc.).
+* `reactivity` – Activates double-buffered reactivity tracking (`Added`, `Changed`, `ChangedTracker`, `RemovedComponents`, etc.).
 * `events` – Activates high-concurrency event broadcasting pipelines (`EventWriter`, `EventReader`, `ParallelEventWriter`, etc.).
+
+### Component Reactivity Architecture
+
+When the `reactivity` feature flag is enabled, Avenix utilizes a demand-driven registration model to keep untracked overhead near-zero.
+
+* **Automatic Dependency Discovery:** Double-buffered internal tracking queues are not unconditionally allocated for every component type. They are registered and initialized automatically only if a registered system explicitly requests them (e.g., via `RemovedComponents<T>`).
+* **Stripped Runtime Pathways:** Component types that are never targeted by reactive query filters are completely omitted from tracking registries. Their execution paths skip frame-boundary memory queue swaps entirely, keeping untracked data paths unburdened by reactive structures.
 
 ---
 
@@ -144,6 +151,8 @@ Evaluates 100,000 target lookups scattered across a pool of 2,000,000 total back
   * `query.get(entity)`: **1.62 ns** per lookup (162.00 µs total execution time)
   * `query.get_unchecked(entity)`: **1.15 ns** per lookup (115.26 µs total execution time)
 
+---
+
 ## Linear Iteration & Reactivity Performance
 
 The following data evaluates linear iteration and mutation speeds over 10,000 entities under varying compilation flags and component states.
@@ -162,6 +171,8 @@ The following data evaluates linear iteration and mutation speeds over 10,000 en
   * `tracked_but_unfiltered_write`: **20.82 µs** total execution time
 * **Reactive Feature On - Tracked Component, Filtered System (`query_write_reactive_tracked`)**
   * `tracked_and_filtered_write`: **1.03 ns** total execution time
+
+---
 
 ## 📜 License
 

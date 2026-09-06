@@ -46,7 +46,7 @@ impl<T: 'static + Send + Sync> SystemParam for ParallelEventWriter<T> {
 
     fn get_param(world: &mut World) -> Self {
         let buffer_ptr = world.get_resource::<EventBuffer<T>>() as *const EventBuffer<T>;
-        let queue = unsafe { (*buffer_ptr).writer_queue.clone() };
+        let queue = unsafe { (*buffer_ptr).write_queue.clone() };
         Self {
             write_buffer: queue,
         }
